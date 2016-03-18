@@ -12,13 +12,13 @@ rmf forensicswiki_count_by_date
 DEFINE EXTRACT       org.apache.pig.piggybank.evaluation.string.EXTRACT();
 
 -- This URL uses just one day
-raw_logs = load 's3://gu-anly502/ps03/forensicswiki.2012-01.unzipped/access.log.2012-01-01' as (line:chararray);
+-- raw_logs = load 's3://gu-anly502/ps03/forensicswiki.2012-01.unzipped/access.log.2012-01-01' as (line:chararray);
 --
 -- This URL reads a month:
 -- raw_logs = load 's3://gu-anly502/ps03/forensicswiki.2012-01.unzipped/access.log.2012-01-??' as (line:chararray);
 --
 -- This URL reads all of 2012:
--- raw_logs = load 's3://gu-anly502/ps03/forensicswiki.2012.txt' as (line:chararray);
+raw_logs = load 's3://gu-anly502/ps03/forensicswiki.2012.txt' as (line:chararray);
 
  
 -- logs_base processes each of the lines 
@@ -36,9 +36,19 @@ logs_base =
      );
 
 -- YOUR CODE GOES HERE
+logs = FOREACH logs_base GENERATE ToDate(SUBSTRING(datetime_str,0,11),'dd/MMM/yyyy') AS date, host, url, size;
+logs = FOREACH logs GENERATE SUBSTRING(ToString(date),0,10) AS date, host, url, size;
+logs = FILTER logs BY SUBSTRING(date,0,4)=='2012';
+logs = FOREACH logs GENERATE REGEX_EXTRACT(url,'(index.php\\?title=|/wiki/)([^ &]*)',2) AS url, date;
+logs = FILTER logs BY url != '' and url != '-';
+group_url = GROUP logs BY url;
+urls = FOREACH group_url GENERATE group as url, COUNT(logs) AS counts;
+sorted_counts = ORDER urls BY counts DESC;
+res = LIMIT sorted_counts 20;
+
 -- PUT YOUR RESULTS IN output
 
-store output INTO 'forensicswiki_page_top20' USING PigStorage();
+store res INTO 'forensicswiki_page_top20' USING PigStorage();
 
 
 -- Get the results
